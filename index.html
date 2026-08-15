@@ -61,45 +61,6 @@
 		}
 	</style>
 	
-	<script type="text/javascript">
-		// Create and resume AudioContext immediately before loading game
-		window.audioContextResumed = false;
-		window.gameAudioContext = null;
-		
-		// Try to create an AudioContext early
-		try {
-			var AudioContextClass = window.AudioContext || window.webkitAudioContext;
-			if (AudioContextClass) {
-				window.gameAudioContext = new AudioContextClass();
-			}
-		} catch (e) {
-			console.log('AudioContext creation failed:', e);
-		}
-		
-		// Function to resume audio context
-		function resumeAudioContextNow() {
-			if (!window.audioContextResumed && window.gameAudioContext) {
-				if (window.gameAudioContext.state === 'suspended') {
-					window.gameAudioContext.resume().then(function() {
-						window.audioContextResumed = true;
-						console.log('✓ AudioContext resumed');
-					}).catch(function(e) {
-						console.log('Error resuming AudioContext:', e);
-					});
-				} else if (window.gameAudioContext.state === 'running') {
-					window.audioContextResumed = true;
-					console.log('✓ AudioContext already running');
-				}
-			}
-		}
-		
-		// Resume immediately on any user interaction
-		document.addEventListener('click', resumeAudioContextNow, true);
-		document.addEventListener('keydown', resumeAudioContextNow, true);
-		document.addEventListener('touchstart', resumeAudioContextNow, true);
-		document.addEventListener('mousedown', resumeAudioContextNow, true);
-	</script>
-	
 	<script type="text/javascript" src="./PsychEngine.js"></script>
 	
 	<script>
@@ -118,26 +79,41 @@
 	<div id="openfl-content"></div>
 	
 	<script type="text/javascript">
-		// Resume audio context before embedding game
-		resumeAudioContextNow();
+		// Monkey-patch AudioContext to handle suspended state gracefully
+		var OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
 		
-		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
+		if (OriginalAudioContext) {
+			window.AudioContext = function() {
+				var ctx = new OriginalAudioContext();
+				
+				// Store reference for resume
+				window.gameAudioContext = ctx;
+				
+				// Try to resume on first user interaction
+				var resumeOnGesture = function() {
+					if (ctx && ctx.state === 'suspended') {
+						ctx.resume().catch(function(e) {
+							// Silently fail - browser policy
+						});
+					}
+					document.removeEventListener('click', resumeOnGesture);
+					document.removeEventListener('keydown', resumeOnGesture);
+					document.removeEventListener('touchstart', resumeOnGesture);
+				};
+				
+				document.addEventListener('click', resumeOnGesture, true);
+				document.addEventListener('keydown', resumeOnGesture, true);
+				document.addEventListener('touchstart', resumeOnGesture, true);
+				
+				return ctx;
+			};
+			
+			window.webkitAudioContext = window.AudioContext;
+		}
 	</script>
 	
 	<script type="text/javascript">
-		// Keep trying to resume audio context every 100ms until successful
-		var resumeInterval = setInterval(function() {
-			if (window.audioContextResumed) {
-				clearInterval(resumeInterval);
-			} else {
-				resumeAudioContextNow();
-			}
-		}, 100);
-		
-		// Stop after 5 seconds
-		setTimeout(function() {
-			clearInterval(resumeInterval);
-		}, 5000);
+		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
 	</script>
 	
 </body>
