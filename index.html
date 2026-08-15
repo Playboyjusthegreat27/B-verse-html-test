@@ -81,27 +81,30 @@
 	<div id="openfl-content"></div>
 	
 	<script type="text/javascript">
+		// Store audio context reference globally for later resume
+		window.audioContextToResume = null;
+		
+		// Hook into AudioContext creation to capture it
+		var originalAudioContext = window.AudioContext || window.webkitAudioContext;
+		if (originalAudioContext) {
+			window.AudioContext = function() {
+				var ctx = new originalAudioContext();
+				window.audioContextToResume = ctx;
+				return ctx;
+			};
+			window.webkitAudioContext = window.AudioContext;
+		}
+		
 		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
 	</script>
 	
 	<script type="text/javascript">
-		// Resume AudioContext on user interaction (required by modern browsers)
+		// Resume AudioContext on user interaction
 		function resumeAudioContext() {
-			try {
-				var audioContexts = [];
-				
-				// Try to find the audio context from the Haxe/OpenFL runtime
-				if (typeof openfl !== 'undefined' && openfl.media && openfl.media.SoundChannel) {
-					// Access through OpenFL
-					var context = openfl.media.SoundChannel.audioContext;
-					if (context && context.state === 'suspended') {
-						context.resume().catch(function(e) {
-							console.log('Error resuming audio context:', e);
-						});
-					}
-				}
-			} catch (e) {
-				console.log('AudioContext resume attempt failed:', e);
+			if (window.audioContextToResume && window.audioContextToResume.state === 'suspended') {
+				window.audioContextToResume.resume().catch(function(e) {
+					console.log('Error resuming audio context:', e);
+				});
 			}
 		}
 		
