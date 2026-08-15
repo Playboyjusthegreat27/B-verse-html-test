@@ -7,7 +7,7 @@
 	<title>Friday Night Funkin' B verse</title>
 	
 	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="mobile-web-app-capable" content="yes">
 	
 	
 	<link rel="shortcut icon" type="image/png" href="./favicon.png">
@@ -81,37 +81,68 @@
 	<div id="openfl-content"></div>
 	
 	<script type="text/javascript">
-		// Store audio context reference globally for later resume
-		window.audioContextToResume = null;
-		
-		// Hook into AudioContext creation to capture it
-		var originalAudioContext = window.AudioContext || window.webkitAudioContext;
-		if (originalAudioContext) {
-			window.AudioContext = function() {
-				var ctx = new originalAudioContext();
-				window.audioContextToResume = ctx;
-				return ctx;
-			};
-			window.webkitAudioContext = window.AudioContext;
-		}
-		
 		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
 	</script>
 	
 	<script type="text/javascript">
-		// Resume AudioContext on user interaction
-		function resumeAudioContext() {
-			if (window.audioContextToResume && window.audioContextToResume.state === 'suspended') {
-				window.audioContextToResume.resume().catch(function(e) {
-					console.log('Error resuming audio context:', e);
-				});
+		// Aggressive AudioContext resume on any user interaction
+		function tryResumeAudioContext() {
+			try {
+				// Search through the haxe runtime for any audio contexts
+				if (typeof window !== 'undefined') {
+					// Try common locations
+					var potentialContexts = [
+						window.audioContext,
+						window.webAudioContext,
+						window.ac,
+						(typeof webkitAudioContext !== 'undefined') ? new webkitAudioContext() : null
+					];
+					
+					// Also search through lime/openfl objects
+					if (typeof lime !== 'undefined') {
+						for (var key in lime) {
+							if (lime[key] && typeof lime[key] === 'object' && lime[key].audioContext) {
+								potentialContexts.push(lime[key].audioContext);
+							}
+						}
+					}
+					
+					// Try to resume any found contexts
+					potentialContexts.forEach(function(ctx) {
+						if (ctx && typeof ctx.resume === 'function' && ctx.state === 'suspended') {
+							ctx.resume().then(function() {
+								console.log('✓ AudioContext resumed successfully');
+							}).catch(function(e) {
+								console.log('AudioContext resume failed:', e);
+							});
+						}
+					});
+				}
+			} catch (e) {
+				console.error('Error in audio context resume:', e);
 			}
 		}
 		
-		// Resume on any user interaction
-		document.addEventListener('click', resumeAudioContext, { once: false });
-		document.addEventListener('keydown', resumeAudioContext, { once: false });
-		document.addEventListener('touchstart', resumeAudioContext, { once: false });
+		// Try to resume on click, key, and touch
+		var resumeAttempted = false;
+		document.addEventListener('click', function() {
+			if (!resumeAttempted) {
+				tryResumeAudioContext();
+				resumeAttempted = true;
+			}
+		});
+		document.addEventListener('keydown', function() {
+			if (!resumeAttempted) {
+				tryResumeAudioContext();
+				resumeAttempted = true;
+			}
+		});
+		document.addEventListener('touchstart', function() {
+			if (!resumeAttempted) {
+				tryResumeAudioContext();
+				resumeAttempted = true;
+			}
+		});
 	</script>
 	
 </body>
