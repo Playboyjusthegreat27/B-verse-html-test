@@ -79,37 +79,32 @@
 	<div id="openfl-content"></div>
 	
 	<script type="text/javascript">
-		// Monkey-patch AudioContext to handle suspended state gracefully
-		var OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+		// Store contexts that need resuming
+		var contextsToResume = [];
 		
+		// Intercept AudioContext constructor
+		var OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
 		if (OriginalAudioContext) {
 			window.AudioContext = function() {
 				var ctx = new OriginalAudioContext();
-				
-				// Store reference for resume
-				window.gameAudioContext = ctx;
-				
-				// Try to resume on first user interaction
-				var resumeOnGesture = function() {
-					if (ctx && ctx.state === 'suspended') {
-						ctx.resume().catch(function(e) {
-							// Silently fail - browser policy
-						});
-					}
-					document.removeEventListener('click', resumeOnGesture);
-					document.removeEventListener('keydown', resumeOnGesture);
-					document.removeEventListener('touchstart', resumeOnGesture);
-				};
-				
-				document.addEventListener('click', resumeOnGesture, true);
-				document.addEventListener('keydown', resumeOnGesture, true);
-				document.addEventListener('touchstart', resumeOnGesture, true);
-				
+				contextsToResume.push(ctx);
 				return ctx;
 			};
-			
 			window.webkitAudioContext = window.AudioContext;
 		}
+		
+		// Resume on user interaction
+		function resumeAllContexts() {
+			contextsToResume.forEach(function(ctx) {
+				if (ctx && ctx.state === 'suspended') {
+					ctx.resume();
+				}
+			});
+		}
+		
+		document.addEventListener('click', resumeAllContexts, { once: true });
+		document.addEventListener('keydown', resumeAllContexts, { once: true });
+		document.addEventListener('touchstart', resumeAllContexts, { once: true });
 	</script>
 	
 	<script type="text/javascript">
