@@ -84,5 +84,32 @@
 		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
 	</script>
 	
+	<script type="text/javascript">
+		// Resume AudioContext on user interaction (required by modern browsers)
+		function resumeAudioContext() {
+			try {
+				var audioContexts = [];
+				
+				// Try to find the audio context from the Haxe/OpenFL runtime
+				if (typeof openfl !== 'undefined' && openfl.media && openfl.media.SoundChannel) {
+					// Access through OpenFL
+					var context = openfl.media.SoundChannel.audioContext;
+					if (context && context.state === 'suspended') {
+						context.resume().catch(function(e) {
+							console.log('Error resuming audio context:', e);
+						});
+					}
+				}
+			} catch (e) {
+				console.log('AudioContext resume attempt failed:', e);
+			}
+		}
+		
+		// Resume on any user interaction
+		document.addEventListener('click', resumeAudioContext, { once: false });
+		document.addEventListener('keydown', resumeAudioContext, { once: false });
+		document.addEventListener('touchstart', resumeAudioContext, { once: false });
+	</script>
+	
 </body>
 </html>
