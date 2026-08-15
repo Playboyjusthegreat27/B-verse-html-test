@@ -12,17 +12,6 @@
 	
 	<link rel="shortcut icon" type="image/png" href="./favicon.png">
 	
-	
-	<script type="text/javascript" src="./PsychEngine.js"></script>
-	
-	<script>
-		window.addEventListener ("touchmove", function (event) { event.preventDefault (); }, { capture: false, passive: false });
-		if (typeof window.devicePixelRatio != 'undefined' && window.devicePixelRatio > 2) {
-			var meta = document.getElementById ("viewport");
-			meta.setAttribute ('content', 'width=device-width, initial-scale=' + (2 / window.devicePixelRatio) + ', user-scalable=no');
-		}
-	</script>
-	
 	<style>
 		html,body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
 		#openfl-content { background: #000000; width: 100%; height: 100%; }
@@ -70,8 +59,56 @@
 			font-weight: normal;
 			font-style: normal;
 		}
-
 	</style>
+	
+	<script type="text/javascript">
+		// Create and resume AudioContext immediately before loading game
+		window.audioContextResumed = false;
+		window.gameAudioContext = null;
+		
+		// Try to create an AudioContext early
+		try {
+			var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+			if (AudioContextClass) {
+				window.gameAudioContext = new AudioContextClass();
+			}
+		} catch (e) {
+			console.log('AudioContext creation failed:', e);
+		}
+		
+		// Function to resume audio context
+		function resumeAudioContextNow() {
+			if (!window.audioContextResumed && window.gameAudioContext) {
+				if (window.gameAudioContext.state === 'suspended') {
+					window.gameAudioContext.resume().then(function() {
+						window.audioContextResumed = true;
+						console.log('✓ AudioContext resumed');
+					}).catch(function(e) {
+						console.log('Error resuming AudioContext:', e);
+					});
+				} else if (window.gameAudioContext.state === 'running') {
+					window.audioContextResumed = true;
+					console.log('✓ AudioContext already running');
+				}
+			}
+		}
+		
+		// Resume immediately on any user interaction
+		document.addEventListener('click', resumeAudioContextNow, true);
+		document.addEventListener('keydown', resumeAudioContextNow, true);
+		document.addEventListener('touchstart', resumeAudioContextNow, true);
+		document.addEventListener('mousedown', resumeAudioContextNow, true);
+	</script>
+	
+	<script type="text/javascript" src="./PsychEngine.js"></script>
+	
+	<script>
+		window.addEventListener ("touchmove", function (event) { event.preventDefault (); }, { capture: false, passive: false });
+		if (typeof window.devicePixelRatio != 'undefined' && window.devicePixelRatio > 2) {
+			var meta = document.getElementById ("viewport");
+			meta.setAttribute ('content', 'width=device-width, initial-scale=' + (2 / window.devicePixelRatio) + ', user-scalable=no');
+		}
+	</script>
 	
 </head>
 <body>
@@ -81,68 +118,26 @@
 	<div id="openfl-content"></div>
 	
 	<script type="text/javascript">
+		// Resume audio context before embedding game
+		resumeAudioContextNow();
+		
 		lime.embed ("PsychEngine", "openfl-content", 1280, 720, { parameters: {} });
 	</script>
 	
 	<script type="text/javascript">
-		// Aggressive AudioContext resume on any user interaction
-		function tryResumeAudioContext() {
-			try {
-				// Search through the haxe runtime for any audio contexts
-				if (typeof window !== 'undefined') {
-					// Try common locations
-					var potentialContexts = [
-						window.audioContext,
-						window.webAudioContext,
-						window.ac,
-						(typeof webkitAudioContext !== 'undefined') ? new webkitAudioContext() : null
-					];
-					
-					// Also search through lime/openfl objects
-					if (typeof lime !== 'undefined') {
-						for (var key in lime) {
-							if (lime[key] && typeof lime[key] === 'object' && lime[key].audioContext) {
-								potentialContexts.push(lime[key].audioContext);
-							}
-						}
-					}
-					
-					// Try to resume any found contexts
-					potentialContexts.forEach(function(ctx) {
-						if (ctx && typeof ctx.resume === 'function' && ctx.state === 'suspended') {
-							ctx.resume().then(function() {
-								console.log('✓ AudioContext resumed successfully');
-							}).catch(function(e) {
-								console.log('AudioContext resume failed:', e);
-							});
-						}
-					});
-				}
-			} catch (e) {
-				console.error('Error in audio context resume:', e);
+		// Keep trying to resume audio context every 100ms until successful
+		var resumeInterval = setInterval(function() {
+			if (window.audioContextResumed) {
+				clearInterval(resumeInterval);
+			} else {
+				resumeAudioContextNow();
 			}
-		}
+		}, 100);
 		
-		// Try to resume on click, key, and touch
-		var resumeAttempted = false;
-		document.addEventListener('click', function() {
-			if (!resumeAttempted) {
-				tryResumeAudioContext();
-				resumeAttempted = true;
-			}
-		});
-		document.addEventListener('keydown', function() {
-			if (!resumeAttempted) {
-				tryResumeAudioContext();
-				resumeAttempted = true;
-			}
-		});
-		document.addEventListener('touchstart', function() {
-			if (!resumeAttempted) {
-				tryResumeAudioContext();
-				resumeAttempted = true;
-			}
-		});
+		// Stop after 5 seconds
+		setTimeout(function() {
+			clearInterval(resumeInterval);
+		}, 5000);
 	</script>
 	
 </body>
