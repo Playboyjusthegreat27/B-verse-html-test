@@ -1,0 +1,28 @@
+name: Sync missing B-Verse song assets
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout HTML repo
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Copy missing song folders from source
+        run: |
+          git clone --depth 1 --branch v1-release https://github.com/Playboyjusthegreat27/B-verse.git /tmp/b-verse
+          mkdir -p assets/songs
+          cp -a /tmp/b-verse/assets/songs/bra-bra assets/songs/
+          cp -a /tmp/b-verse/assets/songs/lafs assets/songs/
+          cp -a /tmp/b-verse/assets/songs/lengerie assets/songs/
+          cp -a /tmp/b-verse/assets/songs/shaggy assets/songs/
+      - name: Commit copied audio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/songs
+          git diff --cached --quiet || git commit -m "Add missing B-Verse song audio assets"
+          git push
