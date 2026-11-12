@@ -27,12 +27,21 @@ jobs:
           cp -a /tmp/b-verse/assets/songs/shaggy assets/songs/
       - name: Convert web audio to MP3
         run: |
-          find assets/songs -type f -name '*.ogg' -print0 | while IFS= read -r -d '' file; do
-            output="${file%.ogg}.mp3"
-            if [ ! -f "$output" ]; then
-              ffmpeg -hide_banner -loglevel error -y -i "$file" -codec:a libmp3lame -qscale:a 2 "$output"
-            fi
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          for source in Path("assets/songs").rglob("*.ogg"):
+              target = source.with_suffix(".mp3")
+              if target.exists():
+                  continue
+              print(f"Converting {source} -> {target}", flush=True)
+              subprocess.run([
+                  "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                  "-i", str(source), "-codec:a", "libmp3lame",
+                  "-qscale:a", "2", str(target)
+              ], check=True)
+          PY
       - name: Commit copied and converted audio
         run: |
           git config user.name "github-actions[bot]"
