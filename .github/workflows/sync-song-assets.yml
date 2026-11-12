@@ -13,6 +13,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+      - name: Install audio converter
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: Copy missing song folders from source
         run: |
           git clone --depth 1 --branch v1-release https://github.com/Playboyjusthegreat27/B-verse.git /tmp/b-verse
@@ -21,10 +25,18 @@ jobs:
           cp -a /tmp/b-verse/assets/songs/lafs assets/songs/
           cp -a /tmp/b-verse/assets/songs/lengerie assets/songs/
           cp -a /tmp/b-verse/assets/songs/shaggy assets/songs/
-      - name: Commit copied audio
+      - name: Convert web audio to MP3
+        run: |
+          find assets/songs -type f -name '*.ogg' -print0 | while IFS= read -r -d '' file; do
+            output="${file%.ogg}.mp3"
+            if [ ! -f "$output" ]; then
+              ffmpeg -hide_banner -loglevel error -y -i "$file" -codec:a libmp3lame -qscale:a 2 "$output"
+            fi
+          done
+      - name: Commit copied and converted audio
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/songs
-          git diff --cached --quiet || git commit -m "Add missing B-Verse song audio assets"
+          git diff --cached --quiet || git commit -m "Add web-compatible MP3 audio for B-Verse songs"
           git push
