@@ -82,6 +82,21 @@ jobs:
               target = output_root / source.relative_to(source_root)
               target.parent.mkdir(parents=True, exist_ok=True)
               shutil.copy2(source, target)
+          # Project.xml excludes OGG files from every web asset bundle.
+          # Convert preload sound effects and menu music too, not just song tracks.
+          preload_root = Path("b-verse/assets/preload")
+          output_preload = Path("b-verse/export/release/html5/bin/assets")
+          for source in preload_root.rglob("*.ogg"):
+              relative = source.relative_to(preload_root)
+              if relative.parts and relative.parts[0] in ("videos", "songs"):
+                  continue
+              target = output_preload / relative.with_suffix(".mp3")
+              target.parent.mkdir(parents=True, exist_ok=True)
+              subprocess.run([
+                  "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                  "-i", str(source), "-codec:a", "libmp3lame",
+                  "-qscale:a", "2", str(target)
+              ], check=True)
           PY
       - name: Setup Pages
         uses: actions/configure-pages@v5
