@@ -1,12 +1,17 @@
-name: Sync B-Verse song audio
+name: Sync B-Verse song audio and deploy Pages
 on:
   push:
     branches: [main]
   workflow_dispatch:
 permissions:
   contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
 jobs:
-  sync:
+  sync-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout HTML repo
@@ -17,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-      - name: Replace HTML audio with source B-Verse audio
+      - name: Replace HTML audio with B-Verse source audio
         run: |
           git clone --depth 1 --branch v1-release https://github.com/Playboyjusthegreat27/B-verse.git /tmp/b-verse
           python3 - <<'PY'
@@ -29,30 +34,42 @@ jobs:
           target_root = Path("assets/songs")
           target_root.mkdir(parents=True, exist_ok=True)
 
-          # Copy every MP3 from the actual B-Verse source, overwriting stale base-game audio.
-          for source in source_root.rglob("*.mp3"):
-              target = target_root / source.relative_to(source_root)
-              target.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(source, target)
-              print(f"Copied source audio: {source.relative_to(source_root)}", flush=True)
-
-          # Convert OGG-only tracks for the HTML build. Prefer source MP3 whenever it exists.
+          # The source OGG files are the custom tracks. Convert these first and overwrite old MP3s.
           for source in source_root.rglob("*.ogg"):
-              if source.with_suffix(".mp3").exists():
-                  continue
               target = target_root / source.relative_to(source_root).with_suffix(".mp3")
               target.parent.mkdir(parents=True, exist_ok=True)
-              print(f"Converting source audio: {source.relative_to(source_root)}", flush=True)
+              print(f"Converting source OGG over target: {source.relative_to(source_root)}", flush=True)
               subprocess.run([
                   "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                   "-i", str(source), "-codec:a", "libmp3lame",
                   "-qscale:a", "2", str(target)
               ], check=True)
+
+          # Copy source MP3-only tracks when no OGG counterpart exists.
+          for source in source_root.rglob("*.mp3"):
+              if source.with_suffix(".ogg").exists():
+                  continue
+              target = target_root / source.relative_to(source_root)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(source, target)
+              print(f"Copied MP3-only source audio: {source.relative_to(source_root)}", flush=True)
           PY
       - name: Commit synced audio
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/songs
-          git diff --cached --quiet || git commit -m "Replace stale audio with B-Verse source tracks"
+          git diff --cached --quiet || git commit -m "Use B-Verse OGG source tracks for HTML audio"
           git push
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: github-pages-${{ github.run_attempt }}
+          path: '.'
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
