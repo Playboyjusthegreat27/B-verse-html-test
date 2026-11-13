@@ -1,4 +1,5 @@
 name: Build B-Verse HTML5 and deploy Pages
+# Explicitly register dialogue JSON text assets in the HTML5 build
 # Normalize case-colliding dialogue JSON before HTML5 asset scan
 # Rebuild source after HTML5 menu sound guard update
 on:
