@@ -1,4 +1,5 @@
 name: Build B-Verse HTML5 and deploy Pages
+# Rebuild source after HTML5 menu sound guard update
 on:
   push:
     branches: [main]
