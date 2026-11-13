@@ -1,0 +1,97 @@
+name: Build B-Verse HTML5 and deploy Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment repo
+        uses: actions/checkout@v4
+      - name: Checkout B-Verse source
+        uses: actions/checkout@v4
+        with:
+          repository: Playboyjusthegreat27/B-verse
+          ref: v1-release
+          path: b-verse
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.2.5
+      - name: Setup haxelib
+        run: |
+          mkdir -p ~/haxelib
+          haxelib setup ~/haxelib
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev libffi8 libssl-dev ffmpeg
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/libffi.so.8 /usr/lib/x86_64-linux-gnu/libffi.so.6 || true
+          sudo ldconfig
+      - name: Install Haxe libraries
+        working-directory: b-verse
+        run: |
+          haxelib install lime 7.9.0 --quiet
+          haxelib install openfl 9.1.0 --quiet
+          haxelib install flixel 4.11.0 --quiet
+          haxelib install flixel-addons 2.10.0 --quiet
+          haxelib install flixel-ui 2.5.0 --quiet
+          haxelib install hscript --quiet
+          haxelib install actuate --quiet
+          haxelib install hxcpp --quiet
+          haxelib set lime 7.9.0
+          haxelib set openfl 9.1.0
+          haxelib set flixel 4.11.0
+          haxelib set flixel-addons 2.10.0
+          haxelib set flixel-ui 2.5.0
+          haxelib run lime setup
+      - name: Build HTML5
+        working-directory: b-verse
+        run: haxelib run lime build html5 -release
+        timeout-minutes: 30
+      - name: Convert custom OGG tracks for HTML5
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          import subprocess
+
+          source_root = Path("b-verse/assets/songs")
+          output_root = Path("b-verse/export/release/html5/bin/assets/songs")
+          output_root.mkdir(parents=True, exist_ok=True)
+
+          # Prefer source OGG files because these are the custom B-Verse tracks.
+          for source in source_root.rglob("*.ogg"):
+              target = output_root / source.relative_to(source_root).with_suffix(".mp3")
+              target.parent.mkdir(parents=True, exist_ok=True)
+              subprocess.run([
+                  "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                  "-i", str(source), "-codec:a", "libmp3lame",
+                  "-qscale:a", "2", str(target)
+              ], check=True)
+
+          # Retain MP3-only tracks when no OGG source exists.
+          for source in source_root.rglob("*.mp3"):
+              if source.with_suffix(".ogg").exists():
+                  continue
+              target = output_root / source.relative_to(source_root)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(source, target)
+          PY
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: b-verse/export/release/html5/bin
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
