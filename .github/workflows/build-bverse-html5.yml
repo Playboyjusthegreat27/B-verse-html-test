@@ -1,5 +1,5 @@
 name: Build B-Verse HTML5 and deploy Pages
-# Rebuild after lowercase dialogue JSON fallback fix
+# Normalize case-colliding dialogue JSON before HTML5 asset scan
 # Rebuild source after HTML5 menu sound guard update
 on:
   push:
@@ -69,6 +69,13 @@ jobs:
                   "-qscale:a", "2", str(target)
               ], check=True)
           PY
+      - name: Remove case-colliding dialogue JSON duplicate
+        working-directory: b-verse
+        run: |
+          test -f assets/preload/images/dialogue/Bump.json
+          rm -f assets/preload/images/dialogue/bump.json
+          echo "Dialogue JSON files after normalization:"
+          find assets/preload/images/dialogue -maxdepth 1 -type f -iname '*bump*.json' -print
       - name: Build HTML5
         working-directory: b-verse
         run: haxelib run lime build html5 -release
