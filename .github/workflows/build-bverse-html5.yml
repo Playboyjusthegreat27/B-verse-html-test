@@ -52,15 +52,19 @@ jobs:
           haxelib set flixel-addons 2.10.0
           haxelib set flixel-ui 2.5.0
           haxelib run lime setup
-      - name: Convert song OGGs before building the asset manifest
+      - name: Convert all game OGG assets before building the asset manifest
         working-directory: b-verse
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import subprocess
 
-          songs_root = Path("assets/songs")
-          for source in songs_root.rglob("*.ogg"):
+          assets_root = Path("assets")
+          converted = 0
+          for source in assets_root.rglob("*.ogg"):
+              relative = source.relative_to(assets_root)
+              if relative.parts[:2] == ("preload", "videos"):
+                  continue
               target = source.with_suffix(".mp3")
               target.parent.mkdir(parents=True, exist_ok=True)
               subprocess.run([
@@ -68,14 +72,9 @@ jobs:
                   "-i", str(source), "-codec:a", "libmp3lame",
                   "-qscale:a", "2", str(target)
               ], check=True)
+              converted += 1
+          print(f"Converted {converted} OGG assets before building")
           PY
-      - name: Remove case-colliding dialogue JSON duplicate
-        working-directory: b-verse
-        run: |
-          test -f assets/preload/images/dialogue/Bump.json
-          rm -f assets/preload/images/dialogue/bump.json
-          echo "Dialogue JSON files after normalization:"
-          find assets/preload/images/dialogue -maxdepth 1 -type f -iname '*bump*.json' -print
       - name: Build HTML5
         working-directory: b-verse
         run: haxelib run lime build html5 -release
