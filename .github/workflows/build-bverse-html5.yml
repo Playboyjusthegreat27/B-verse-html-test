@@ -1,4 +1,5 @@
 name: Build B-Verse HTML5 and deploy Pages
+# Rebuild source after HTML5 menu sound guard update
 on:
   push:
     branches: [main]
@@ -50,47 +51,40 @@ jobs:
           haxelib set flixel-addons 2.10.0
           haxelib set flixel-ui 2.5.0
           haxelib run lime setup
-      - name: Build HTML5
+      - name: Convert song OGGs before building the asset manifest
         working-directory: b-verse
-        run: haxelib run lime build html5 -release
-        timeout-minutes: 30
-      - name: Convert custom OGG tracks for HTML5
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import shutil
           import subprocess
 
-          source_root = Path("b-verse/assets/songs")
-          output_root = Path("b-verse/export/release/html5/bin/assets/songs")
-          output_root.mkdir(parents=True, exist_ok=True)
-
-          # Prefer source OGG files because these are the custom B-Verse tracks.
-          for source in source_root.rglob("*.ogg"):
-              target = output_root / source.relative_to(source_root).with_suffix(".mp3")
+          songs_root = Path("assets/songs")
+          for source in songs_root.rglob("*.ogg"):
+              target = source.with_suffix(".mp3")
               target.parent.mkdir(parents=True, exist_ok=True)
               subprocess.run([
                   "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                   "-i", str(source), "-codec:a", "libmp3lame",
                   "-qscale:a", "2", str(target)
               ], check=True)
+          PY
+      - name: Build HTML5
+        working-directory: b-verse
+        run: haxelib run lime build html5 -release
+        timeout-minutes: 30
+      - name: Convert preload OGG sounds and music for HTML5
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
 
-          # Retain MP3-only tracks when no OGG source exists.
-          for source in source_root.rglob("*.mp3"):
-              if source.with_suffix(".ogg").exists():
-                  continue
-              target = output_root / source.relative_to(source_root)
-              target.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(source, target)
-          # Project.xml excludes OGG files from every web asset bundle.
-          # Convert preload sound effects and menu music too, not just song tracks.
           preload_root = Path("b-verse/assets/preload")
-          output_preload = Path("b-verse/export/release/html5/bin/assets")
+          output_root = Path("b-verse/export/release/html5/bin/assets")
           for source in preload_root.rglob("*.ogg"):
               relative = source.relative_to(preload_root)
               if relative.parts and relative.parts[0] in ("videos", "songs"):
                   continue
-              target = output_preload / relative.with_suffix(".mp3")
+              target = output_root / relative.with_suffix(".mp3")
               target.parent.mkdir(parents=True, exist_ok=True)
               subprocess.run([
                   "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
